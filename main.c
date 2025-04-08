@@ -12,18 +12,16 @@
 
 #define FIFO1 "/tmp/fifo1"
 #define FIFO2 "/tmp/fifo2"
-#define LOG_FILE "/tmp/daemon_log.txt"
+#define LOG_FILE "/tmp/syswh2_daemon_log.txt"
 #define TIMEOUT 30  // seconds
 
-// result global variable to store the result of the child process
-int result = 0;
 int child_exit_count = 0;
 pid_t child_pids[2];
 int child_exit_status[2] = {-1, -1};
 
 FILE *log_file;
 
-// Utility function
+// logging function to write messages to the log file
 void log_message(const char *message) {
     time_t now = time(NULL);
     char *timestamp = ctime(&now);
@@ -32,6 +30,7 @@ void log_message(const char *message) {
     fflush(log_file);
 }
 
+// signal handler for daemon termination and reconfiguration
 void daemon_signal_handler(int sig) {
     if (sig == SIGTERM) {
         log_message("Daemon received SIGTERM, exiting.");
@@ -40,31 +39,37 @@ void daemon_signal_handler(int sig) {
         unlink(FIFO2);
         exit(0);
     } else if (sig == SIGHUP) {
-        log_message("Daemon received SIGHUP, reloading config.");
-        // Reconfiguration logic can be added here
+        log_message("Daemon received SIGHUP.");
     }
 }
 
 void handle_sigchld(int sig) {
     int status;
     pid_t pid;
+    // uses a while loop to handle all terminated children without blocking
     while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
         char msg[128];
-        int exit_status = -1;
+        int exit_status = -1; // temporary variable to store exit status or signal
+        // checks if the child exited normally and get its exit status
         if (WIFEXITED(status)) {
             exit_status = WEXITSTATUS(status);
             snprintf(msg, sizeof(msg), "Child %d exited with status %d", pid, exit_status);
-        } else if (WIFSIGNALED(status)) {
+        } 
+        // checks if the child was terminated by a signal and get the signal number
+        else if (WIFSIGNALED(status)) {
             exit_status = WTERMSIG(status);
             snprintf(msg, sizeof(msg), "Child %d terminated by signal %d", pid, exit_status);
         }
+        // updates the global child_exit_status array with the child's status
         for (int i = 0; i < 2; i++) {
             if (child_pids[i] == pid) {
-                child_exit_status[i] = exit_status;
+                child_exit_status[i] = exit_status; // stores the processed exit status or signal
                 break;
             }
         }
+        // logs the child's termination status
         log_message(msg);
+        // increments the count of exited children
         child_exit_count++;
     }
 }
@@ -81,7 +86,7 @@ void become_daemon() {
     signal(SIGTERM, daemon_signal_handler);
     signal(SIGHUP, daemon_signal_handler);
 
-    // prevent acquiring a controlling terminal
+    // prevent acquiring a controlling terminal for the daemon process to avoid being killed by a terminal signal
     pid = fork();
 
     // error in fork
@@ -90,13 +95,13 @@ void become_daemon() {
     // parent exits
     if (pid > 0) exit(EXIT_SUCCESS);
 
-    // Re-register SIGCHLD handler after the second fork
+    // re-set SIGCHLD handler after the second fork
     signal(SIGCHLD, handle_sigchld);
 
     // change working directory to root
     chdir("/");
 
-    // clear file mode creation mask
+    // clear file mode creation mask 
     umask(0);
 
     // close inherited file descriptors
@@ -113,6 +118,7 @@ void become_daemon() {
     close(null_fd);              // Close the extra /dev/null descriptor
 
 }
+
 int main(int argc, char *argv[]) {
     // check the argument count
     if (argc != 3) {                                                                    
