@@ -12,7 +12,7 @@
 
 #define FIFO1 "/tmp/fifo1"
 #define FIFO2 "/tmp/fifo2"
-#define LOG_FILE "/tmp/syswh2_daemon_log.txt"
+#define LOG_FILE "/tmp/syshw2_daemon_log.txt"
 #define TIMEOUT 30  // seconds
 
 int child_exit_count = 0;
@@ -178,10 +178,10 @@ int main(int argc, char *argv[]) {
         // write the maximum to the second fifo
         int fd2 = open(FIFO2, O_WRONLY);
         write(fd2, &max, sizeof(int));
-
+	
         // close the second fifo
         close(fd2);
-
+	
         // exit status
         exit(10); 
     }
@@ -193,7 +193,6 @@ int main(int argc, char *argv[]) {
     if (child_pids[1] == 0) {
         // sleep for 10 seconds to simulate work and allow parent to write first fifo and allow first child to write second fifo
         sleep(10);
-
         // open the second fifo for reading and read the maximum integer from the fifo with non-blocking flag
         int fd2 = open(FIFO2, O_RDONLY | O_NONBLOCK);
         
@@ -240,24 +239,21 @@ int main(int argc, char *argv[]) {
                 // check if the child process is still running
                 if (child_exit_status[i] == -1) {
                     kill(child_pids[i], SIGKILL);
-
-                    // log the killing of the child process
-                    log_message("Killed child due to timeout.");
                 }
             }
             
-            // log the exit status of the child processes
-            char msg[128];
-            for (int i = 0; i < 2; i++) {
+            // the handle_sigchld function handles the timeout killed processes exit statuses, no need for this part.
+            /*for (int i = 0; i < 2; i++) {
                 snprintf(msg, sizeof(msg), "Child PID %d exit status: %d", child_pids[i], WEXITSTATUS(child_exit_status[i]));
                 log_message(msg);
-            }
+            }*/
 
             // exit the loop if the timeout termination happens
             break;
         }
     }
-
+    // sleep 2 seconds if any child processes are killed by the timeout so the handle_sigchld() signal handler can catch the signals and log them into the log file in the meanwhile.
+    sleep(2);
     // log the end of the daemon program
     log_message("Daemon shutting down.");
 

@@ -14,7 +14,7 @@ $(TARGET): main.c
 
 # run the program with example arguments
 run: $(TARGET)
-	./$(TARGET) 5 10
+	./$(TARGET) 5 739
 
 # clean up build files
 clean:
